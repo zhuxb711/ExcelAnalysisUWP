@@ -1,0 +1,32 @@
+﻿<ContentDialog
+    x:Class="ExcelAnalysisUWP.OptionDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ExcelAnalysisUWP"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    mc:Ignorable="d"
+    Title="选项"
+    PrimaryButtonText="开始处理"
+    CloseButtonText="取消"
+    PrimaryButtonClick="ContentDialog_PrimaryButtonClick"
+    SecondaryButtonClick="ContentDialog_SecondaryButtonClick">
+
+    <ContentDialog.Resources>
+        <controls:TeachingTip x:Name="EmptyTip"
+                              IsLightDismissEnabled="True"
+                              Subtitle="请选择Excel文件才能继续哦"
+                              PreferredPlacement="TopRight"
+                              Target="{x:Bind PickFile}">
+        </controls:TeachingTip>
+    </ContentDialog.Resources>
+    
+    <Grid>
+        <StackPanel Margin="0,10,0,0">
+            <Button Width="120" Content="选取Excel文件" Name="PickFile" Margin="0,0,0,20" Click="PickFile_Click"/>
+            <ComboBox x:Name="ModeCombo" Header="处理模式" Width="160" HorizontalAlignment="Left" SelectionChanged="ModeCombo_SelectionChanged"/>
+            <ComboBox Header="处理方式" x:Name="MethodCombo" Margin="0,20,0,0" Width="160" HorizontalAlignment="Left" SelectionChanged="MethodCombo_SelectionChanged"/>
+        </StackPanel>
+    </Grid>
+</ContentDialog>
