@@ -9,7 +9,7 @@
 
     Background="{StaticResource PageBackground}">
 
-    <Grid Background="Transparent" DragEnter="Grid_DragEnter" AllowDrop="True" Drop="Grid_Drop">
+    <Grid x:Name="Gr" Background="Transparent" DragEnter="Grid_DragEnter" AllowDrop="True" Drop="Grid_Drop">
         <Grid.RowDefinitions>
             <RowDefinition Height="30"/>
             <RowDefinition/>
@@ -19,12 +19,16 @@
         </Border>
         
         <StackPanel x:Name="Drag" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBlock FontSize="28" Text="拖拽Excel文件至此"/>
-            <TextBlock Margin="0,10,0,0" Text="或" FontSize="28" HorizontalAlignment="Center"/>
-            <Button Margin="0,10,0,0" Style="{ThemeResource ButtonRevealStyle}" FontSize="18" HorizontalAlignment="Center" Width="120" Content="点击此处" Name="ClickHere" Click="ClickHere_Click"/>
+            <StackPanel.ChildrenTransitions>
+                <TransitionCollection>
+                    <EntranceThemeTransition FromVerticalOffset="200" IsStaggeringEnabled="True"/>
+                </TransitionCollection>
+            </StackPanel.ChildrenTransitions>
+            <TextBlock FontSize="28" Text="Welcome" TextAlignment="Center"/>
+            <TextBlock Margin="0,10,0,0" Text="请将Excel文件放置至此" FontSize="28" HorizontalAlignment="Center"/>
         </StackPanel>
         <StackPanel Grid.Row="1" x:Name="Stack" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
-            <ProgressBar x:Name="Progress" Width="250" Height="10" IsIndeterminate="True"/>
+            <ProgressBar x:Name="Progress" Width="250" IsIndeterminate="True"/>
         </StackPanel>
     </Grid>
 </Page>

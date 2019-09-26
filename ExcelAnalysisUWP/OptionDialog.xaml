@@ -10,23 +10,13 @@
     Title="选项"
     PrimaryButtonText="开始处理"
     CloseButtonText="取消"
-    Background="{StaticResource DialogAcrylicBrush}"
-    PrimaryButtonClick="ContentDialog_PrimaryButtonClick">
-
-    <ContentDialog.Resources>
-        <controls:TeachingTip x:Name="EmptyTip"
-                              IsLightDismissEnabled="True"
-                              Subtitle="请选择Excel文件才能继续哦"
-                              PreferredPlacement="TopRight"
-                              Target="{x:Bind PickFile}">
-        </controls:TeachingTip>
-    </ContentDialog.Resources>
+    Background="{StaticResource DialogAcrylicBrush}">
     
     <Grid>
         <StackPanel Margin="0,10,0,0">
-            <Button Width="120" Content="选取Excel文件" Name="PickFile" Margin="0,0,0,20" Click="PickFile_Click"/>
             <ComboBox x:Name="ModeCombo" Header="处理模式" Width="200" HorizontalAlignment="Left" SelectionChanged="ModeCombo_SelectionChanged"/>
             <ComboBox Header="处理方式" x:Name="MethodCombo" Margin="0,20,0,0" Width="200" HorizontalAlignment="Left" SelectionChanged="MethodCombo_SelectionChanged"/>
+            <CheckBox Margin="0,10,0,0" Content="处理完成后覆盖源文件" IsChecked="{x:Bind IsCoverOriginFile,Mode=TwoWay}"/>
         </StackPanel>
     </Grid>
 </ContentDialog>

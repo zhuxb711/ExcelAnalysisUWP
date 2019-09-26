@@ -1,4 +1,5 @@
-﻿using NPOI.HSSF.UserModel;
+﻿using AnimationEffectProvider;
+using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using System;
@@ -8,10 +9,13 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Foundation;
 using Windows.Storage;
 using Windows.Storage.Streams;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Navigation;
 
 namespace ExcelAnalysisUWP
 {
@@ -32,11 +36,28 @@ namespace ExcelAnalysisUWP
         private IProgress<object> Pro;
         private int Tick;
         private StorageFile File;
+        private EntranceAnimationEffect EntranceEffectProvider;
+        private bool IsCoverOriginFile;
 
         public MainPage()
         {
             InitializeComponent();
             Window.Current.SetTitleBar(TitleBar);
+            Loaded += MainPage_Loaded;
+        }
+
+        private void MainPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            EntranceEffectProvider.StartEntranceEffect();
+        }
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
+        {
+            if (e.Parameter is Rect SplashRect)
+            {
+                EntranceEffectProvider = new EntranceAnimationEffect(this, Gr, SplashRect);
+                EntranceEffectProvider.PrepareEntranceEffect();
+            }
         }
 
         private void DrawLineCore(ICell UpCell, ICell DownCell)
@@ -344,6 +365,8 @@ namespace ExcelAnalysisUWP
 
             Progress.IsIndeterminate = true;
 
+            await Task.Delay(3000);
+
             Pro = new Progress<object>(async (o) =>
             {
                 double CurrentValue = 100 - (Tick-- - 1) * (100f / TotalDataLength);
@@ -365,7 +388,7 @@ namespace ExcelAnalysisUWP
                  });
             });
 
-            await Task.Factory.StartNew(() =>
+            await Task.Run(() =>
             {
                 try
                 {
@@ -454,12 +477,21 @@ namespace ExcelAnalysisUWP
                         ProcessDelegate(CurrentRow, ColumnsCount);
                     }
 
-                    StorageFile TempFile = ApplicationData.Current.TemporaryFolder.CreateFileAsync("Result.xlsx", CreationCollisionOption.ReplaceExisting).AsTask().Result;
+                    StorageFile TempFile = ApplicationData.Current.TemporaryFolder.CreateFileAsync("ResultTemp.xlsx", CreationCollisionOption.ReplaceExisting).AsTask().Result;
                     using (var Stream = TempFile.OpenAsync(FileAccessMode.ReadWrite).AsTask().Result.AsStream())
                     {
                         HWorkBook.Write(Stream);
                     }
-                    TempFile.MoveAndReplaceAsync(File).AsTask().Wait();
+
+                    if (IsCoverOriginFile)
+                    {
+                        TempFile.MoveAndReplaceAsync(File).AsTask().Wait();
+                    }
+                    else
+                    {
+                        string NewName = File.DisplayName + "-已处理" + File.FileType;
+                        TempFile.CopyAsync(File.GetParentAsync().AsTask().Result, NewName, NameCollisionOption.GenerateUniqueName).AsTask().Wait();
+                    }
 
                     Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
                     {
@@ -467,7 +499,8 @@ namespace ExcelAnalysisUWP
                         {
                             Title = "提示",
                             Content = "针对Excel文件的处理已成功完成",
-                            CloseButtonText = "确定"
+                            CloseButtonText = "确定",
+                            Background = Application.Current.Resources["DialogAcrylicBrush"] as Brush
                         };
                         _ = await dialog.ShowAsync();
                     }).AsTask().Wait();
@@ -480,7 +513,8 @@ namespace ExcelAnalysisUWP
                         {
                             Title = "提示",
                             Content = "出现错误，将撤销所有更改：" + ex.Message,
-                            CloseButtonText = "确定"
+                            CloseButtonText = "确定",
+                            Background = Application.Current.Resources["DialogAcrylicBrush"] as Brush
                         };
                         _ = await dialog.ShowAsync();
                     }).AsTask().Wait();
@@ -508,7 +542,8 @@ namespace ExcelAnalysisUWP
                     {
                         Title = "错误",
                         Content = "同时传入多个文件是不允许的",
-                        CloseButtonText = "确定"
+                        CloseButtonText = "确定",
+                        Background = Application.Current.Resources["DialogAcrylicBrush"] as Brush
                     };
                     _ = await dialog.ShowAsync();
                 }
@@ -519,12 +554,14 @@ namespace ExcelAnalysisUWP
                         switch (InputFile.FileType)
                         {
                             case ".xls":
-                                OptionDialog Dialog = new OptionDialog(Visibility.Collapsed);
+                                File = await StorageFile.GetFileFromPathAsync(InputFile.Path);
+                                OptionDialog Dialog = new OptionDialog();
                                 if (await Dialog.ShowAsync() == ContentDialogResult.Primary)
                                 {
                                     Mode = Dialog.Mode;
                                     ExcutionMethod = Dialog.ExcutionMethod;
-                                    File = InputFile;
+                                    IsCoverOriginFile = Dialog.IsCoverOriginFile;
+
                                     using (IRandomAccessStream FileSteam = await File.OpenAsync(FileAccessMode.Read))
                                     {
                                         HWorkBook = new HSSFWorkbook(FileSteam.AsStream());
@@ -538,7 +575,8 @@ namespace ExcelAnalysisUWP
                                 {
                                     Title = "错误",
                                     Content = "文件格式错误，仅允许.xls格式的文件",
-                                    CloseButtonText = "确定"
+                                    CloseButtonText = "确定",
+                                    Background = Application.Current.Resources["DialogAcrylicBrush"] as Brush
                                 };
                                 _ = await dia.ShowAsync();
                                 break;
@@ -551,7 +589,8 @@ namespace ExcelAnalysisUWP
                         {
                             Title = "错误",
                             Content = "不允许传入文件夹，仅允许传入文件",
-                            CloseButtonText = "确定"
+                            CloseButtonText = "确定",
+                            Background = Application.Current.Resources["DialogAcrylicBrush"] as Brush
                         };
                         _ = await dialog.ShowAsync();
                     }
@@ -561,27 +600,13 @@ namespace ExcelAnalysisUWP
 
         private void Grid_DragEnter(object sender, DragEventArgs e)
         {
+            e.DragUIOverride.Caption = "添加文件 o(^▽^)o";
+            e.DragUIOverride.IsCaptionVisible = true;
+            e.DragUIOverride.IsContentVisible = true;
+            e.DragUIOverride.IsGlyphVisible = true;
+
             e.AcceptedOperation = DataPackageOperation.Copy;
             e.Handled = true;
-        }
-
-        private async void ClickHere_Click(object sender, RoutedEventArgs e)
-        {
-            OptionDialog dialog = new OptionDialog(Visibility.Visible);
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            {
-                Mode = dialog.Mode;
-                ExcutionMethod = dialog.ExcutionMethod;
-
-                File = dialog.InputFile;
-                using (IRandomAccessStream FileSteam = await File.OpenAsync(FileAccessMode.Read))
-                {
-                    HWorkBook = new HSSFWorkbook(FileSteam.AsStream());
-                    Sheet = HWorkBook.GetSheetAt(0);
-                }
-
-                await Start_Process();
-            }
         }
     }
 
@@ -597,7 +622,6 @@ namespace ExcelAnalysisUWP
         Secondary = 1,
         Third = 2,
         Forth = 3,
-        Fifth = 4,
         Sixth = 5
     }
 

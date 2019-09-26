@@ -50,36 +50,29 @@ namespace ExcelAnalysisUWP
             viewTitleBar.ButtonForegroundColor = (Color)Resources["SystemBaseHighColor"];
 
 
-            // 不要在窗口已包含内容时重复应用程序初始化，
-            // 只需确保窗口处于活动状态
             if (!(Window.Current.Content is Frame rootFrame))
             {
-                // 创建要充当导航上下文的框架，并导航到第一页
-                rootFrame = new Frame();
-
-                rootFrame.NavigationFailed += OnNavigationFailed;
-
-                if (e.PreviousExecutionState == ApplicationExecutionState.Terminated)
-                {
-                    //TODO: 从之前挂起的应用程序加载状态
-                }
-
-                // 将框架放在当前窗口中
-                Window.Current.Content = rootFrame;
+                ExtendedSplash extendedSplash = new ExtendedSplash(e.SplashScreen);
+                Window.Current.Content = extendedSplash;
             }
 
-            if (e.PrelaunchActivated == false)
+            Window.Current.Activate();
+        }
+
+        protected override void OnActivated(IActivatedEventArgs args)
+        {
+            CoreApplication.GetCurrentView().TitleBar.ExtendViewIntoTitleBar = true;
+            var viewTitleBar = ApplicationView.GetForCurrentView().TitleBar;
+            viewTitleBar.ButtonBackgroundColor = Colors.Transparent;
+            viewTitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+            viewTitleBar.ButtonForegroundColor = (Color)Resources["SystemBaseHighColor"];
+
+            if (!(Window.Current.Content is Frame))
             {
-                if (rootFrame.Content == null)
-                {
-                    // 当导航堆栈尚未还原时，导航到第一页，
-                    // 并通过将所需信息作为导航参数传入来配置
-                    // 参数
-                    rootFrame.Navigate(typeof(MainPage), e.Arguments);
-                }
-                // 确保当前窗口处于活动状态
-                Window.Current.Activate();
+                ExtendedSplash extendedSplash = new ExtendedSplash(args.SplashScreen);
+                Window.Current.Content = extendedSplash;
             }
+            Window.Current.Activate();
         }
 
         /// <summary>
