@@ -26,14 +26,13 @@ namespace ExcelAnalysisUWP
             MethodCombo.Items.Add("错位");
             MethodCombo.Items.Add("退一-1");
             MethodCombo.Items.Add("错位-1");
-            MethodCombo.Items.Add("退一-1不保存");
             MethodCombo.Items.Add("错位-20");
             MethodCombo.SelectedIndex = 0;
         }
 
         private void ContentDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
         {
-            if (InputFile == null)
+            if (PickFile.Visibility == Visibility.Visible && InputFile == null)
             {
                 EmptyTip.IsOpen = true;
                 args.Cancel = true;
@@ -48,8 +47,7 @@ namespace ExcelAnalysisUWP
                 CommitButtonText = "确定",
                 SuggestedStartLocation = PickerLocationId.Desktop
             };
-            Picker.FileTypeFilter.Add("xlsx文件|*.xlsx");
-            Picker.FileTypeFilter.Add("xls文件|*.xls");
+            Picker.FileTypeFilter.Add(".xls");
 
             InputFile = await Picker.PickSingleFileAsync();
         }
@@ -82,9 +80,6 @@ namespace ExcelAnalysisUWP
                     break;
                 case "错位-1":
                     ExcutionMethod = ExcutionMethod.Forth;
-                    break;
-                case "退一-1不保存":
-                    ExcutionMethod = ExcutionMethod.Fifth;
                     break;
                 case "错位-20":
                     ExcutionMethod = ExcutionMethod.Sixth;
