@@ -1,7 +1,6 @@
 ﻿using AnimationEffectProvider;
-using NPOI.HSSF.UserModel;
-using NPOI.SS.UserModel;
-using NPOI.SS.Util;
+using OfficeOpenXml;
+using OfficeOpenXml.Drawing;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,11 +23,13 @@ namespace ExcelAnalysisUWP
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        private HSSFWorkbook HWorkBook;
-        private ISheet Sheet;
+        private ExcelPackage Package;
+        private ExcelWorkbook Workbook { get => Package?.Workbook; }
+        private ExcelWorksheets Worksheets { get => Workbook?.Worksheets; }
+        private ExcelWorksheet CurrentSheet { get; set; }
         private ExcutionMode Mode;
-        private const int DataStartRow = 69;
-        private const int DataStartColumn = 2;
+        private const int DataStartRow = 70;
+        private const int DataStartColumn = 3;
         private const int GoupDistance = 6;
         private ExcutionMethod ExcutionMethod;
         private Action<int, int> ProcessDelegate;
@@ -60,17 +61,37 @@ namespace ExcelAnalysisUWP
             }
         }
 
-        private void DrawLineCore(ICell UpCell, ICell DownCell)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void DrawLineCore(ExcelRange UpCell, ExcelRange DownCell)
         {
+            System.Diagnostics.Debug.WriteLine(UpCell.Start.Row + "/" + UpCell.Start.Column);
             lock (this)
             {
-                HSSFPatriarch Patriarch = (HSSFPatriarch)Sheet.CreateDrawingPatriarch();
-                HSSFClientAnchor Anchor = new HSSFClientAnchor(Sheet.GetColumnWidth(UpCell.ColumnIndex) / 2, UpCell.Row.Height, Sheet.GetColumnWidth(DownCell.ColumnIndex) / 2, 0, UpCell.ColumnIndex, UpCell.RowIndex, DownCell.ColumnIndex, DownCell.RowIndex);
-                HSSFSimpleShape Line = Patriarch.CreateSimpleShape(Anchor);
+                ExcelShape LineShape = CurrentSheet.Drawings.AddShape(Guid.NewGuid().ToString(), eShapeStyle.Line);
+                if (UpCell.Start.Column < DownCell.Start.Column)
+                {
+                    LineShape.From.Row = UpCell.Start.Row;
+                    LineShape.From.Column = UpCell.Start.Column;
+                    LineShape.From.RowOff = Convert.ToInt32(CurrentSheet.Row(UpCell.Start.Row).Height);
+                    LineShape.From.ColumnOff = Convert.ToInt32(CurrentSheet.Column(UpCell.Start.Column).Width / 2);
 
-                Line.ShapeType = HSSFSimpleShape.OBJECT_TYPE_LINE;
-                Line.LineStyle = HSSFShape.LINESTYLE_SOLID;
-                Line.LineWidth = 12700;
+                    LineShape.To.Row = DownCell.Start.Row;
+                    LineShape.To.Column = DownCell.Start.Column;
+                    LineShape.To.RowOff = Convert.ToInt32(CurrentSheet.Row(DownCell.Start.Row).Height);
+                    LineShape.To.ColumnOff = Convert.ToInt32(CurrentSheet.Column(DownCell.Start.Column).Width / 2);
+                }
+                else
+                {
+                    LineShape.To.Row = UpCell.Start.Row;
+                    LineShape.To.Column = UpCell.Start.Column;
+                    LineShape.To.RowOff = Convert.ToInt32(CurrentSheet.Row(UpCell.Start.Row).Height);
+                    LineShape.To.ColumnOff = Convert.ToInt32(CurrentSheet.Column(UpCell.Start.Column).Width / 2);
+
+                    LineShape.From.Row = DownCell.Start.Row;
+                    LineShape.From.Column = DownCell.Start.Column;
+                    LineShape.From.RowOff = Convert.ToInt32(CurrentSheet.Row(DownCell.Start.Row).Height);
+                    LineShape.From.ColumnOff = Convert.ToInt32(CurrentSheet.Column(DownCell.Start.Column).Width / 2);
+                }
             }
         }
 
@@ -79,20 +100,20 @@ namespace ExcelAnalysisUWP
         {
             for (int i = DataStartColumn; i < DataLength + DataStartColumn; i++)
             {
-                if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(i).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(i).ToString())
+                if (CurrentSheet.Cells[CurrentRow, i].Text == CurrentSheet.Cells[CurrentRow + 1, i].Text)
                 {
-                    ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i);
-                    ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i - 1);
-                    if (ZeroObject.ToString() == "0")
+                    ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, i];
+                    ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, i - 1];
+                    if (ZeroObject.Text == "0")
                     {
                         DrawLineCore(OneObject, ZeroObject);
                     }
                 }
                 else
                 {
-                    ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i);
-                    ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i - 1);
-                    if (OneObject.ToString() == "1")
+                    ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, i];
+                    ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, i - 1];
+                    if (OneObject.Text == "1")
                     {
                         DrawLineCore(OneObject, ZeroObject);
                     }
@@ -103,18 +124,18 @@ namespace ExcelAnalysisUWP
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void GroupProcessorPrimaryMethod(int CurrentRow, int DataLength)
         {
-            CellRangeAddress LeftMove = new CellRangeAddress(CurrentRow, CurrentRow, DataStartColumn + 1, DataStartColumn + DataLength);
-            LeftMove.CopyTo(Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(DataStartColumn));
+            ExcelRange LeftMove = CurrentSheet.Cells[CurrentRow, DataStartColumn + 1, CurrentRow, DataStartColumn + DataLength];
+            LeftMove.Copy(CurrentSheet.Cells[CurrentRow + 1, DataStartColumn]);
 
             for (int i = DataStartColumn; i < DataLength + DataStartColumn; i++)
             {
-                if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(i).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(i).ToString())
+                if (CurrentSheet.Cells[CurrentRow, i].Text == CurrentSheet.Cells[CurrentRow + 1, i].Text)
                 {
-                    Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i).SetCellValue("1");
+                    CurrentSheet.Cells[CurrentRow + 2, i].Value = "1";
                 }
                 else
                 {
-                    Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i).SetCellValue("0");
+                    CurrentSheet.Cells[CurrentRow + 4, i].Value = "0";
                 }
             }
 
@@ -125,14 +146,14 @@ namespace ExcelAnalysisUWP
                 Pro.Report(null);
             }
 
-            CellRangeAddress Range = new CellRangeAddress(CurrentRow + 4, CurrentRow + 4, DataStartColumn, DataLength + 2);
-            Range.CopyTo(Sheet.GetRowOrCreate(CurrentRow + GoupDistance).GetCellOrCreate(DataStartColumn));
+            ExcelRange Range = CurrentSheet.Cells[CurrentRow + 4, DataStartColumn, CurrentRow + 4, DataLength + 2];
+            Range.Copy(CurrentSheet.Cells[CurrentRow + GoupDistance, DataStartColumn]);
 
             for (int i = DataStartColumn; i < DataLength + DataStartColumn; i++)
             {
-                if (Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i).ToString() != "0")
+                if (CurrentSheet.Cells[CurrentRow + 4, i].Text != "0")
                 {
-                    Sheet.GetRowOrCreate(CurrentRow + GoupDistance).GetCellOrCreate(i).SetCellValue("1");
+                    CurrentSheet.Cells[CurrentRow + GoupDistance, i].Value = "1";
                 }
             }
         }
@@ -143,23 +164,23 @@ namespace ExcelAnalysisUWP
             int Row = CurrentRow, Length = DataLength;
             for (int i = DataStartColumn; i < Length + DataStartColumn; i++)
             {
-                if (Sheet.GetRowOrCreate(Row).GetCellOrCreate(i).ToString() == Sheet.GetRowOrCreate(Row + 1).GetCellOrCreate(i).ToString())
+                if (CurrentSheet.Cells[Row, i].Text == CurrentSheet.Cells[Row + 1, i].Text)
                 {
-                    Sheet.GetRowOrCreate(Row + 2).GetCellOrCreate(i).SetCellValue("1");
+                    CurrentSheet.Cells[Row + 2, i].Value = "1";
                 }
                 else
                 {
-                    Sheet.GetRowOrCreate(Row + 4).GetCellOrCreate(i).SetCellValue("0");
+                    CurrentSheet.Cells[Row + 4, i].Value = "0";
                 }
             }
 
             if (DataLength != 1)
             {
-                CellRangeAddress Range = new CellRangeAddress(CurrentRow, CurrentRow, DataStartColumn, DataStartColumn + TotalDataLength);
-                Range.CopyTo(Sheet.GetRowOrCreate(CurrentRow + 6).GetCellOrCreate(DataStartColumn));
+                ExcelRange Range = CurrentSheet.Cells[CurrentRow, DataStartColumn, CurrentRow, DataStartColumn + TotalDataLength];
+                Range.Copy(CurrentSheet.Cells[CurrentRow + 6, DataStartColumn]);
 
-                CellRangeAddress Left = new CellRangeAddress(CurrentRow + 1, CurrentRow + 1, DataStartColumn + 1, DataStartColumn + DataLength);
-                Left.CopyTo(Sheet.GetRowOrCreate(CurrentRow + 7).GetCellOrCreate(DataStartColumn));
+                ExcelRange Left = CurrentSheet.Cells[CurrentRow + 1, DataStartColumn + 1, CurrentRow + 1, DataStartColumn + DataLength];
+                Left.Copy(CurrentSheet.Cells[CurrentRow + 7, DataStartColumn]);
             }
 
             if (Mode == ExcutionMode.ComputeDataAndLine)
@@ -172,21 +193,21 @@ namespace ExcelAnalysisUWP
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void GroupProcessorThirdMethod(int CurrentRow, int DataLength)
         {
-            ICell AddObject = Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(DataStartColumn + DataLength);
+            ExcelRange AddObject = CurrentSheet.Cells[CurrentRow, DataStartColumn + DataLength];
 
             int CompareIndex = DataStartColumn + DataLength - 1;
-            Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(CompareIndex).SetCellValue(AddObject.ToString());
+            CurrentSheet.Cells[CurrentRow + 1, CompareIndex].Value = AddObject.Text;
 
-            if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(CompareIndex).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(CompareIndex).ToString())
+            if (CurrentSheet.Cells[CurrentRow, CompareIndex].Text == CurrentSheet.Cells[CurrentRow + 1, CompareIndex].Text)
             {
-                ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(CompareIndex);
-                OneObject.SetCellValue("1");
-                Sheet.GetRowOrCreate(CurrentRow + 6).GetCellOrCreate(CompareIndex).SetCellValue(OneObject.ToString());
+                ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, CompareIndex];
+                OneObject.Value = "1";
+                CurrentSheet.Cells[CurrentRow + 6, CompareIndex].Value = (OneObject.Text);
 
                 if (Mode == ExcutionMode.ComputeDataAndLine)
                 {
-                    ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(CompareIndex - 1);
-                    if (ZeroObject.ToString() == "0")
+                    ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, CompareIndex - 1];
+                    if (ZeroObject.Text == "0")
                     {
                         DrawLineCore(OneObject, ZeroObject);
                     }
@@ -194,14 +215,14 @@ namespace ExcelAnalysisUWP
             }
             else
             {
-                ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(CompareIndex);
-                ZeroObject.SetCellValue("0");
-                Sheet.GetRowOrCreate(CurrentRow + 6).GetCellOrCreate(CompareIndex).SetCellValue(ZeroObject.ToString());
+                ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, CompareIndex];
+                ZeroObject.Value = "0";
+                CurrentSheet.Cells[CurrentRow + 6, CompareIndex].Value = (ZeroObject);
 
                 if (Mode == ExcutionMode.ComputeDataAndLine)
                 {
-                    ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(CompareIndex - 1);
-                    if (OneObject.ToString() == "1")
+                    ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, CompareIndex - 1];
+                    if (OneObject.Text == "1")
                     {
                         DrawLineCore(OneObject, ZeroObject);
                     }
@@ -216,15 +237,15 @@ namespace ExcelAnalysisUWP
         {
             int CompareIndex = DataStartColumn + DataLength - 1;
 
-            if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(CompareIndex).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(CompareIndex).ToString())
+            if (CurrentSheet.Cells[CurrentRow, CompareIndex].Text == CurrentSheet.Cells[CurrentRow + 1, CompareIndex].Text)
             {
-                ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(CompareIndex);
-                OneObject.SetCellValue("1");
+                ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, CompareIndex];
+                OneObject.Value = "1";
 
                 if (Mode == ExcutionMode.ComputeDataAndLine)
                 {
-                    ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(CompareIndex - 1);
-                    if (ZeroObject.ToString() == "0")
+                    ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, CompareIndex - 1];
+                    if (ZeroObject.Text == "0")
                     {
                         DrawLineCore(OneObject, ZeroObject);
                     }
@@ -232,13 +253,13 @@ namespace ExcelAnalysisUWP
             }
             else
             {
-                ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(CompareIndex);
-                ZeroObject.SetCellValue("0");
+                ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, CompareIndex];
+                ZeroObject.Value = "0";
 
                 if (Mode == ExcutionMode.ComputeDataAndLine)
                 {
-                    ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(CompareIndex - 1);
-                    if (OneObject.ToString() == "1")
+                    ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, CompareIndex - 1];
+                    if (OneObject.Text == "1")
                     {
                         DrawLineCore(OneObject, ZeroObject);
                     }
@@ -249,10 +270,10 @@ namespace ExcelAnalysisUWP
 
             if (DataLength != 1)
             {
-                CellRangeAddress Range = new CellRangeAddress(DataStartRow, DataStartRow, DataStartColumn, DataStartColumn + TotalDataLength);
-                Range.CopyTo(Sheet.GetRowOrCreate(CurrentRow + 6).GetCellOrCreate(DataStartColumn));
-                ICell Origin = Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(DataStartColumn + TotalDataLength);
-                Sheet.GetRowOrCreate(CurrentRow + 7).GetCellOrCreate(CompareIndex - 1).SetCellValue(Origin.ToString());
+                ExcelRange Range = CurrentSheet.Cells[DataStartRow, DataStartColumn, DataStartRow, DataStartColumn + TotalDataLength];
+                Range.Copy(CurrentSheet.Cells[CurrentRow + 6, DataStartColumn]);
+                ExcelRange Origin = CurrentSheet.Cells[CurrentRow, DataStartColumn + TotalDataLength];
+                CurrentSheet.Cells[CurrentRow + 7, CompareIndex - 1].Value = Origin.Text;
             }
         }
 
@@ -264,8 +285,8 @@ namespace ExcelAnalysisUWP
                 //这里加个删除前面不要的数据的方法就好了
                 if ((DataStartColumn + DataLength - 21) < DataStartColumn)
                 {
-                    CellRangeAddress Range = new CellRangeAddress(CurrentRow + 1, CurrentRow + 1, DataStartColumn + 1, DataStartColumn + DataLength);
-                    Range.CopyTo(Sheet.GetRowOrCreate(CurrentRow + 7).GetCellOrCreate(DataStartColumn));
+                    ExcelRange Range = CurrentSheet.Cells[CurrentRow + 1, DataStartColumn + 1, CurrentRow + 1, DataStartColumn + DataLength];
+                    Range.Copy(CurrentSheet.Cells[CurrentRow + 7, DataStartColumn]);
                 }
             }
 
@@ -274,13 +295,13 @@ namespace ExcelAnalysisUWP
             {
                 for (int i = DataStartColumn + DataLength - 20; i < DataLength + DataStartColumn; i++)
                 {
-                    if (Sheet.GetRowOrCreate(CurrentRow).Cells[i].ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(i).ToString())
+                    if (CurrentSheet.Cells[CurrentRow, i].Text == CurrentSheet.Cells[CurrentRow + 1, i].Text)
                     {
-                        Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i).SetCellValue("1");
+                        CurrentSheet.Cells[CurrentRow + 2, i].Value = "1";
                     }
                     else
                     {
-                        Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i).SetCellValue("0");
+                        CurrentSheet.Cells[CurrentRow + 4, i].Value = "0";
                     }
                 }
             }
@@ -288,13 +309,13 @@ namespace ExcelAnalysisUWP
             {
                 for (int i = DataStartColumn; i < DataLength + DataStartColumn; i++)
                 {
-                    if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(i).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(i).ToString())
+                    if (CurrentSheet.Cells[CurrentRow, i].Text == CurrentSheet.Cells[CurrentRow + 1, i].Text)
                     {
-                        Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i).SetCellValue("1");
+                        CurrentSheet.Cells[CurrentRow + 2, i].Value = "1";
                     }
                     else
                     {
-                        Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i).SetCellValue("0");
+                        CurrentSheet.Cells[CurrentRow + 4, i].Value = "0";
                     }
                 }
             }
@@ -306,20 +327,20 @@ namespace ExcelAnalysisUWP
                 {
                     for (int i = DataStartColumn + DataLength - 20; i < DataLength + DataStartColumn; i++)
                     {
-                        if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(i).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(i).ToString())
+                        if (CurrentSheet.Cells[CurrentRow, i].Text == CurrentSheet.Cells[CurrentRow + 1, i].Text)
                         {
-                            ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i);
-                            ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i - 1);
-                            if (ZeroObject.ToString() == "0")
+                            ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, i];
+                            ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, i - 1];
+                            if (ZeroObject.Text == "0")
                             {
                                 DrawLineCore(OneObject, ZeroObject);
                             }
                         }
                         else
                         {
-                            ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i);
-                            ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i - 1);
-                            if (OneObject.ToString() == "1")
+                            ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, i];
+                            ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, i - 1];
+                            if (OneObject.Text == "1")
                             {
                                 DrawLineCore(OneObject, ZeroObject);
                             }
@@ -330,20 +351,20 @@ namespace ExcelAnalysisUWP
                 {
                     for (int i = DataStartColumn; i < DataLength + DataStartColumn; i++)
                     {
-                        if (Sheet.GetRowOrCreate(CurrentRow).GetCellOrCreate(i).ToString() == Sheet.GetRowOrCreate(CurrentRow + 1).GetCellOrCreate(i).ToString())
+                        if (CurrentSheet.Cells[CurrentRow, i].Text == CurrentSheet.Cells[CurrentRow + 1, i].Text)
                         {
-                            ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i);
-                            ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i - 1);
-                            if (ZeroObject.ToString() == "0")
+                            ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, i];
+                            ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, i - 1];
+                            if (ZeroObject.Text == "0")
                             {
                                 DrawLineCore(OneObject, ZeroObject);
                             }
                         }
                         else
                         {
-                            ICell ZeroObject = Sheet.GetRowOrCreate(CurrentRow + 4).GetCellOrCreate(i);
-                            ICell OneObject = Sheet.GetRowOrCreate(CurrentRow + 2).GetCellOrCreate(i - 1);
-                            if (OneObject.ToString() == "1")
+                            ExcelRange ZeroObject = CurrentSheet.Cells[CurrentRow + 4, i];
+                            ExcelRange OneObject = CurrentSheet.Cells[CurrentRow + 2, i - 1];
+                            if (OneObject.Text == "1")
                             {
                                 DrawLineCore(OneObject, ZeroObject);
                             }
@@ -369,7 +390,7 @@ namespace ExcelAnalysisUWP
 
             Pro = new Progress<object>(async (o) =>
             {
-                double CurrentValue = 100 - (Tick-- - 1) * (100f / TotalDataLength);
+                double CurrentText = 100 - (Tick-- - 1) * (100f / TotalDataLength);
                 await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                  {
                      if (Progress.IsIndeterminate == true)
@@ -377,11 +398,11 @@ namespace ExcelAnalysisUWP
                          Progress.IsIndeterminate = false;
                      }
 
-                     Progress.Value = CurrentValue;
+                     Progress.Value = CurrentText;
 
-                     double CeilingValue = Math.Ceiling(CurrentValue);
+                     double CeilingText = Math.Ceiling(CurrentText);
 
-                     if (CeilingValue > 100)
+                     if (CeilingText > 100)
                      {
                          return;
                      }
@@ -396,7 +417,7 @@ namespace ExcelAnalysisUWP
 
                     for (int i = DataStartColumn; ; i++)
                     {
-                        if (Sheet.GetRowOrCreate(DataStartRow).GetCellOrCreate(i).ToString() == "")
+                        if (CurrentSheet.Cells[DataStartRow, i].Text == "")
                         {
                             ColumnsCount = i - 4;
                             break;
@@ -409,37 +430,37 @@ namespace ExcelAnalysisUWP
                     {
                         case ExcutionMethod.Primary:
                             {
-                                CellRangeAddress Range = new CellRangeAddress(DataStartRow, DataStartRow, DataStartColumn, DataStartColumn + ColumnsCount);
-                                Range.CopyTo(Sheet.GetRowOrCreate(DataStartRow + 2).GetCellOrCreate(DataStartColumn));
+                                ExcelRange Range = CurrentSheet.Cells[DataStartRow, DataStartColumn, DataStartRow, DataStartColumn + ColumnsCount];
+                                Range.Copy(CurrentSheet.Cells[DataStartRow + 2, DataStartColumn]);
 
                                 ProcessDelegate = GroupProcessorPrimaryMethod;
                                 break;
                             }
                         case ExcutionMethod.Secondary:
                             {
-                                CellRangeAddress Range = new CellRangeAddress(DataStartRow, DataStartRow, DataStartColumn, DataStartColumn + ColumnsCount);
-                                Range.CopyTo(Sheet.GetRowOrCreate(DataStartRow + 2).GetCellOrCreate(DataStartColumn));
+                                ExcelRange Range = CurrentSheet.Cells[DataStartRow, DataStartColumn, DataStartRow, DataStartColumn + ColumnsCount];
+                                Range.Copy(CurrentSheet.Cells[DataStartRow + 2, DataStartColumn]);
 
-                                CellRangeAddress LeftMove = new CellRangeAddress(DataStartRow + 2, DataStartRow + 2, DataStartColumn + 1, DataStartColumn + ColumnsCount);
-                                LeftMove.CopyTo(Sheet.GetRowOrCreate(DataStartRow + 3).GetCellOrCreate(DataStartColumn));
+                                ExcelRange LeftMove = CurrentSheet.Cells[DataStartRow + 2, DataStartColumn + 1, DataStartRow + 2, DataStartColumn + ColumnsCount];
+                                LeftMove.Copy(CurrentSheet.Cells[DataStartRow + 3, DataStartColumn]);
 
                                 ProcessDelegate = GroupProcessorSecondaryMethod;
                                 break;
                             }
                         case ExcutionMethod.Third:
                             {
-                                ICell AddObject = Sheet.GetRowOrCreate(DataStartRow).GetCellOrCreate(DataStartColumn + ColumnsCount);
-                                Sheet.GetRowOrCreate(DataStartRow + 2).GetCellOrCreate(DataStartColumn + ColumnsCount).SetCellValue(AddObject.ToString());
+                                ExcelRange AddObject = CurrentSheet.Cells[DataStartRow, DataStartColumn + ColumnsCount];
+                                CurrentSheet.Cells[DataStartRow + 2, DataStartColumn + ColumnsCount].Value = AddObject.Text;
 
                                 ProcessDelegate = GroupProcessorThirdMethod;
                                 break;
                             }
                         case ExcutionMethod.Forth:
                             {
-                                ICell AddObject = Sheet.GetRowOrCreate(DataStartRow).GetCellOrCreate(DataStartColumn + ColumnsCount);
-                                Sheet.GetRowOrCreate(DataStartRow + 2).GetCellOrCreate(DataStartColumn + ColumnsCount).SetCellValue(AddObject.ToString());
+                                ExcelRange AddObject = CurrentSheet.Cells[DataStartRow, DataStartColumn + ColumnsCount];
+                                CurrentSheet.Cells[DataStartRow + 2, DataStartColumn + ColumnsCount].Value = AddObject.Text;
 
-                                Sheet.GetRowOrCreate(DataStartRow + 3).GetCellOrCreate(DataStartColumn + ColumnsCount - 1).SetCellValue(AddObject.ToString());
+                                CurrentSheet.Cells[DataStartRow + 3, DataStartColumn + ColumnsCount - 1].Value = AddObject.Text;
 
                                 ProcessDelegate = GroupProcessorForthMethod;
                                 break;
@@ -447,16 +468,16 @@ namespace ExcelAnalysisUWP
                         case ExcutionMethod.Sixth:
                             {
                                 //直接生成250个模块的原始数据
-                                CellRangeAddress Origin = new CellRangeAddress(DataStartRow, DataStartRow, DataStartColumn, DataStartColumn + ColumnsCount);
+                                ExcelRange Origin = CurrentSheet.Cells[DataStartRow, DataStartColumn, DataStartRow, DataStartColumn + ColumnsCount];
                                 for (int i = 0; i < 250; i++)
                                 {
-                                    Origin.CopyTo(Sheet.GetRowOrCreate(DataStartRow + 2 + 6 * i).GetCellOrCreate(DataStartColumn));
+                                    Origin.Copy(CurrentSheet.Cells[DataStartRow + 2 + 6 * i, DataStartColumn]);
                                 }
 
-                                CellRangeAddress Left = new CellRangeAddress(DataStartRow, DataStartRow, DataStartColumn + ColumnsCount - 19, DataStartColumn + ColumnsCount);
+                                ExcelRange Left = CurrentSheet.Cells[DataStartRow, DataStartColumn + ColumnsCount - 19, DataStartRow, DataStartColumn + ColumnsCount];
                                 for (int i = 0; i < 250; i++)
                                 {
-                                    Left.CopyTo(Sheet.GetRowOrCreate(DataStartRow + 3 + i * 6).GetCellOrCreate(DataStartColumn + ColumnsCount - 20 - i));
+                                    Left.Copy(CurrentSheet.Cells[DataStartRow + 3 + i * 6, DataStartColumn + ColumnsCount - 20 - i]);
                                     //复制错位行能完整复制时候的数
                                     if ((DataStartColumn + ColumnsCount - 20 - i) <= DataStartColumn)
                                     {
@@ -464,8 +485,8 @@ namespace ExcelAnalysisUWP
                                     }
                                 }
 
-                                CellRangeAddress LeftMove = new CellRangeAddress(DataStartRow + 2, DataStartRow + 2, DataStartColumn + 1 + ColumnsCount - 20, DataStartColumn + ColumnsCount);
-                                LeftMove.CopyTo(Sheet.GetRowOrCreate(DataStartRow + 3).GetCellOrCreate(DataStartColumn + ColumnsCount - 20));
+                                ExcelRange LeftMove = CurrentSheet.Cells[DataStartRow + 2, DataStartColumn + 1 + ColumnsCount - 20, DataStartRow + 2, DataStartColumn + ColumnsCount];
+                                LeftMove.Copy(CurrentSheet.Cells[DataStartRow + 3, DataStartColumn + ColumnsCount - 20]);
 
                                 ProcessDelegate = GroupProcessorSixthMethod;
                                 break;
@@ -480,7 +501,7 @@ namespace ExcelAnalysisUWP
                     StorageFile TempFile = ApplicationData.Current.TemporaryFolder.CreateFileAsync("ResultTemp.xlsx", CreationCollisionOption.ReplaceExisting).AsTask().Result;
                     using (var Stream = TempFile.OpenAsync(FileAccessMode.ReadWrite).AsTask().Result.AsStream())
                     {
-                        HWorkBook.Write(Stream);
+                        Package.SaveAs(Stream);
                     }
 
                     if (IsCoverOriginFile)
@@ -521,8 +542,8 @@ namespace ExcelAnalysisUWP
                 }
                 finally
                 {
-                    HWorkBook.Close();
-                    HWorkBook = null;
+                    Package.Dispose();
+                    Package = null;
                 }
             });
 
@@ -553,7 +574,7 @@ namespace ExcelAnalysisUWP
                     {
                         switch (InputFile.FileType)
                         {
-                            case ".xls":
+                            case ".xlsx":
                                 File = await StorageFile.GetFileFromPathAsync(InputFile.Path);
                                 OptionDialog Dialog = new OptionDialog();
                                 if (await Dialog.ShowAsync() == ContentDialogResult.Primary)
@@ -564,8 +585,8 @@ namespace ExcelAnalysisUWP
 
                                     using (IRandomAccessStream FileSteam = await File.OpenAsync(FileAccessMode.Read))
                                     {
-                                        HWorkBook = new HSSFWorkbook(FileSteam.AsStream());
-                                        Sheet = HWorkBook.GetSheetAt(0);
+                                        Package = new ExcelPackage(FileSteam.AsStream());
+                                        CurrentSheet = Worksheets[0];
                                     }
                                     await Start_Process();
                                 }
@@ -623,34 +644,6 @@ namespace ExcelAnalysisUWP
         Third = 2,
         Forth = 3,
         Sixth = 5
-    }
-
-    public static class Extention
-    {
-        public static void CopyTo(this CellRangeAddress Range, ICell DestinationCell)
-        {
-            for (var RowNum = Range.FirstRow; RowNum <= Range.LastRow; RowNum++)
-            {
-                IRow DestinationRow = DestinationCell.Row;
-
-                for (int ColNum = Range.FirstColumn, Length = 0; ColNum <= Range.LastColumn; ColNum++, Length++)
-                {
-                    DestinationCell.Row.GetCellOrCreate(DestinationCell.ColumnIndex + Length).SetCellValue(DestinationCell.Sheet.GetRow(RowNum).GetCellOrCreate(ColNum).ToString());
-                }
-            }
-        }
-
-        public static ICell GetCellOrCreate(this IRow Row, int cellnum)
-        {
-            ICell Cell = Row.GetCell(cellnum, MissingCellPolicy.CREATE_NULL_AS_BLANK);
-            return Cell ?? Row.CreateCell(cellnum, CellType.String);
-        }
-
-        public static IRow GetRowOrCreate(this ISheet sheet, int rownum)
-        {
-            IRow Row = sheet.GetRow(rownum);
-            return Row ?? sheet.CreateRow(rownum);
-        }
     }
 }
 
